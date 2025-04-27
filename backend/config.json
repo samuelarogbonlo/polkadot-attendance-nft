@@ -1,0 +1,13 @@
+{
+  "server_address": ":8080",
+  "polkadot_rpc": "wss://westend-rpc.polkadot.io",
+  "contract_address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+  "luma_api_key": "",
+  "luma_webhook_key": "",
+  "admin_username": "admin",
+  "admin_password": "changeme123",
+  "rate_limit": {
+    "enabled": true,
+    "requests_per_minute": 60
+  }
+} 

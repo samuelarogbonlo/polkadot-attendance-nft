@@ -1,0 +1,8 @@
+{
+  "short_name": "Attendance NFT",
+  "name": "Polkadot Attendance NFT System",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#e6007a",
+  "background_color": "#ffffff"
+} 

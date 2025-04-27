@@ -1,0 +1,123 @@
+# Dependency directories
+node_modules/
+**/node_modules/
+**/*/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
+
+# Testing
+/coverage
+**/coverage/
+.nyc_output
+
+# Production builds
+/build
+/dist
+**/build/
+**/dist/
+/backend/bin
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/go.work
+/backend/attendance-nft
+/backend/attendance-nft-prod
+
+# Environment variables
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vs/
+*~
+.DS_Store
+.editorconfig
+.eslintcache
+*.sublime*
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+/tmp/
+**/tmp/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Logs
+logs/
+*.log
+
+# Frontend cache
+.npm/
+.eslintcache
+/.sass-cache/
+/connect.lock
+/.cache/
+.parcel-cache/
+
+# Typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Contract build artifacts
+/contracts/target/
+/contracts/artifacts/
+
+# Cursor-specific files
+/.cursor/
+!/.cursor/project-features.md
+!/.cursor/production-deployment.md
+!/.cursor/scratchpad.md
+
+# Mac-specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Local development
+.local/
+local/
+
+# Public uploads (if applicable)
+/uploads/
+/public/uploads/
+
+# Storybook
+/storybook-static/
+
+# Debug
+.debug/
+debug/
+
+# Rust
+Cargo.lock
+target/
+
+# Docker
+.dockerignore 
