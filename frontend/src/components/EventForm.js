@@ -11,10 +11,14 @@ import {
   Event, LocationOn, Title, Add, CloudDownload, Close, 
   LinkOff, Link as LinkIcon, Check
 } from '@mui/icons-material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { useTheme } from '@mui/material/styles';
 
 function EventForm({ onEventCreated }) {
   const [name, setName] = useState('');
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(null);
   const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -26,12 +30,14 @@ function EventForm({ onEventCreated }) {
   const [importingEvent, setImportingEvent] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    date: '',
-    location: '',
-    startDate: '',
-    endDate: '',
+    date: null,
+    location: 'Virtual',
+    capacity: 100
   });
-  const [submitting, setSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const theme = useTheme();
 
   // Mock function to simulate Luma connection
   const handleConnectLuma = () => {
@@ -89,38 +95,70 @@ function EventForm({ onEventCreated }) {
     }, 1000);
   };
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    console.log(`Field ${name} changed to:`, value);
+    setFormData(prevData => ({
+      ...prevData,
+      [name]: value
+    }));
+  };
+
+  const handleDateChange = (newDate) => {
+    setFormData({
+      ...formData,
+      date: newDate
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    
+    // Prevent double submission
+    if (isSubmitting) {
+      console.log('Preventing duplicate submission - form is already submitting');
+      return;
+    }
+    
+    // Validate form
+    if (!formData.name) {
+      setErrorMessage('Event name is required');
+      return;
+    }
+    
+    // Set submitting state to prevent multiple clicks
+    setIsSubmitting(true);
     
     try {
-      // Convert the date to Unix timestamp
-      const startTimestamp = new Date(formData.startDate).getTime() / 1000;
-      const endTimestamp = new Date(formData.endDate).getTime() / 1000;
+      // Add an explicit delay to ensure UI shows the loading state
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      const eventData = {
-        ...formData,
-        start_time: startTimestamp,
-        end_time: endTimestamp,
-      };
+      const response = await api.createEvent(formData);
+      console.log('Event created:', response);
       
-      const response = await api.createEvent(eventData);
-      
-      // Reset form and show success message
+      // Clear form only after successful creation
       setFormData({
         name: '',
-        date: '',
-        location: '',
-        startDate: '',
-        endDate: '',
+        date: null,
+        location: 'Virtual',
+        capacity: 100
       });
-      onEventCreated(response);
       
+      // Show success message
+      setSuccessMessage('Event created successfully!');
+      
+      // Notify parent component
+      if (onEventCreated) {
+        onEventCreated(response);
+      }
+      
+      // Add a longer delay before allowing new submissions to prevent accidental double-clicks
+      await new Promise(resolve => setTimeout(resolve, 1500));
     } catch (error) {
       console.error('Error creating event:', error);
-      setError('Failed to create event. Please try again.');
+      setErrorMessage('Failed to create event. Please try again.');
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -137,10 +175,11 @@ function EventForm({ onEventCreated }) {
             borderRadius: 2,
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
-            borderColor: 'rgba(85, 43, 191, 0.5)',
+            color: theme.palette.mode === 'dark' ? '#E6007A' : undefined,
+            borderColor: theme.palette.mode === 'dark' ? 'rgba(230, 0, 122, 0.5)' : 'rgba(85, 43, 191, 0.5)',
             '&:hover': {
-              borderColor: 'rgba(85, 43, 191, 0.8)',
-              backgroundColor: 'rgba(85, 43, 191, 0.08)',
+              borderColor: theme.palette.mode === 'dark' ? 'rgba(230, 0, 122, 0.8)' : 'rgba(85, 43, 191, 0.8)',
+              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(230, 0, 122, 0.08)' : 'rgba(85, 43, 191, 0.08)',
             },
           }}
         >
@@ -149,21 +188,21 @@ function EventForm({ onEventCreated }) {
       </Box>
 
       <form onSubmit={handleSubmit}>
-        {error && (
+        {errorMessage && (
           <Alert severity="error" sx={{ mb: 3 }}>
             <AlertTitle>Error</AlertTitle>
-            {error}
+            {errorMessage}
           </Alert>
         )}
 
         <Snackbar
-          open={success}
+          open={successMessage}
           autoHideDuration={4000}
-          onClose={() => setSuccess(false)}
+          onClose={() => setSuccessMessage('')}
           anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         >
           <Alert severity="success" variant="filled">
-            Event created successfully!
+            {successMessage}
           </Alert>
         </Snackbar>
 
@@ -171,9 +210,10 @@ function EventForm({ onEventCreated }) {
           <Grid item xs={12}>
             <TextField
               id="name"
+              name="name"
               label="Event Name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={handleChange}
               required
               fullWidth
               placeholder="e.g. Polkadot Meetup Berlin"
@@ -188,33 +228,28 @@ function EventForm({ onEventCreated }) {
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <TextField
-              id="date"
-              label="Event Date"
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              required
-              fullWidth
-              InputLabelProps={{
-                shrink: true,
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Event fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="Event Date"
+                value={formData.date}
+                onChange={handleDateChange}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    variant: 'outlined'
+                  }
+                }}
+              />
+            </LocalizationProvider>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <TextField
               id="location"
+              name="location"
               label="Event Location"
               value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              onChange={handleChange}
               required
               fullWidth
               placeholder="e.g. Berlin, Germany"
@@ -228,6 +263,27 @@ function EventForm({ onEventCreated }) {
             />
           </Grid>
 
+          <Grid item xs={12} md={6}>
+            <TextField
+              id="capacity"
+              name="capacity"
+              label="Attendee Capacity"
+              type="number"
+              value={formData.capacity}
+              onChange={handleChange}
+              required
+              fullWidth
+              placeholder="e.g. 100"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Event fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
               <Button
@@ -235,15 +291,15 @@ function EventForm({ onEventCreated }) {
                 variant="contained"
                 color="primary"
                 size="large"
-                disabled={submitting}
-                startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <Add />}
+                disabled={isSubmitting}
+                startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <Add />}
                 sx={{ 
                   px: 4, 
                   py: 1, 
                   borderRadius: 2,
-                  backdropFilter: submitting ? 'none' : 'blur(8px)',
-                  WebkitBackdropFilter: submitting ? 'none' : 'blur(8px)',
-                  backgroundColor: submitting ? 'rgba(0,0,0,0.12)' : 'rgba(230, 0, 122, 0.85)',
+                  backdropFilter: isSubmitting ? 'none' : 'blur(8px)',
+                  WebkitBackdropFilter: isSubmitting ? 'none' : 'blur(8px)',
+                  backgroundColor: isSubmitting ? 'rgba(0,0,0,0.12)' : 'rgba(230, 0, 122, 0.85)',
                   '&:hover': {
                     backgroundColor: 'rgba(230, 0, 122, 0.95)',
                   },
@@ -251,7 +307,7 @@ function EventForm({ onEventCreated }) {
                   border: '1px solid rgba(230, 0, 122, 0.1)',
                 }}
               >
-                {submitting ? 'Creating...' : 'Create Event'}
+                {isSubmitting ? 'Creating...' : 'Create Event'}
               </Button>
             </Box>
           </Grid>

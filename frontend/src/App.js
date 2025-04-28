@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Link, useLocation, Navigate, useParams } from 'react-router-dom';
 import { 
   AppBar, Box, CssBaseline, Drawer, IconButton, List, ListItem, 
   ListItemButton, ListItemIcon, ListItemText, Toolbar, Typography,
@@ -28,6 +28,55 @@ import PolkadotBackground from './components/PolkadotBackground';
 import { FontSizeProvider, useFontSize, SCALE_OPTIONS } from './contexts/FontSizeContext';
 import Login from './pages/Login';
 import { api } from './services/api';
+import MockCheckInSimulator from './components/MockCheckInSimulator';
+
+// CheckIn page component
+const CheckInPage = () => {
+  const { eventId } = useParams();
+  const [event, setEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const loadEvent = async () => {
+      try {
+        const events = await api.getEvents();
+        const foundEvent = events.find(e => e.id === eventId);
+        if (foundEvent) {
+          setEvent(foundEvent);
+        }
+      } catch (error) {
+        console.error('Error loading event:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadEvent();
+  }, [eventId]);
+  
+  if (loading) {
+    return (
+      <Container>
+        <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Typography variant="h6">Loading event information...</Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  return (
+    <Container>
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h4" gutterBottom>Check-In: {event?.name || 'Unknown Event'}</Typography>
+        <Typography variant="body1" color="text.secondary" paragraph>
+          Use this page to simulate attendee check-ins for this event. Each check-in will
+          generate an NFT for the attendee's wallet address.
+        </Typography>
+        <MockCheckInSimulator eventId={eventId} />
+      </Box>
+    </Container>
+  );
+};
 
 function FontSizeSelector() {
   const { scale, setScale, scaleLabel } = useFontSize();
@@ -400,6 +449,7 @@ function MainContent() {
               <Route path="/login" element={<Login />} />
               <Route path="/admin/*" element={<ProtectedRoute element={<Admin />} />} />
               <Route path="/gallery" element={<Gallery />} />
+              <Route path="/check-in/:eventId" element={<CheckInPage />} />
             </Routes>
           </Container>
         </Box>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Typography, 
@@ -11,7 +11,11 @@ import {
   Card,
   CardContent,
   Divider,
-  useTheme
+  useTheme,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { api } from '../services/api';
 
@@ -20,17 +24,47 @@ import { api } from '../services/api';
  * This is used for demonstration purposes since a real Luma API integration
  * requires a paid subscription.
  */
-const MockCheckInSimulator = () => {
+const MockCheckInSimulator = ({ onNFTMinted, eventId: initialEventId }) => {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
-    eventId: 'luma123',
+    eventId: initialEventId || 'luma123',
     attendeeId: 'attendee456',
     attendeeName: 'John Doe',
-    walletAddress: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
+    walletAddress: localStorage.getItem('wallet_address') || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
   });
+  const [availableEvents, setAvailableEvents] = useState([]);
+
+  // Fetch available events for the dropdown
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const events = await api.getEvents();
+        setAvailableEvents(events);
+        
+        // If we have an initialEventId, use it
+        if (initialEventId) {
+          setFormData(prev => ({
+            ...prev,
+            eventId: initialEventId
+          }));
+        }
+        // Otherwise use the first event if available
+        else if (events.length > 0 && !initialEventId) {
+          setFormData(prev => ({
+            ...prev,
+            eventId: events[0].id
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching events:", error);
+      }
+    };
+    
+    fetchEvents();
+  }, [initialEventId]);
 
   const handleChange = (e) => {
     setFormData({
@@ -45,27 +79,75 @@ const MockCheckInSimulator = () => {
     setSuccess(false);
 
     try {
-      // Send a simulated check-in event to the backend
-      const response = await fetch('http://localhost:8080/api/webhook/check-in', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          event_id: formData.eventId,
-          attendee_id: formData.attendeeId,
-          timestamp: new Date().toISOString()
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to simulate check-in');
+      // Fetch event details to get the real event name for the NFT
+      let eventName = "Unknown Event";
+      try {
+        const events = await api.getEvents();
+        const event = events.find(e => e.id === formData.eventId);
+        if (event) {
+          eventName = event.name;
+        }
+      } catch (err) {
+        console.warn('Could not fetch event details, using ID as name');
       }
 
+      // In demo mode, directly create a mock NFT in local storage
+      const mockNft = {
+        id: `nft-${Date.now()}`,
+        owner: formData.walletAddress,
+        metadata: {
+          name: `${eventName} Attendance`,
+          description: `Attended ${eventName}`,
+          image: 'https://via.placeholder.com/300',
+          event_id: formData.eventId,
+          event_name: eventName,
+          attendee: formData.attendeeName,
+          event_date: new Date().toISOString().split('T')[0],
+          location: 'Virtual',
+          attributes: [
+            { trait_type: 'Event', value: eventName },
+            { trait_type: 'Date', value: new Date().toISOString().split('T')[0] },
+            { trait_type: 'Attendee', value: formData.attendeeName },
+            { trait_type: 'Location', value: 'Virtual' }
+          ]
+        },
+        created_at: new Date().toISOString()
+      };
+      
+      // Get existing mock NFTs from localStorage
+      let mockNfts = JSON.parse(localStorage.getItem('mock_nfts') || '[]');
+      mockNfts.push(mockNft);
+      localStorage.setItem('mock_nfts', JSON.stringify(mockNfts));
+      
+      // Dispatch an event to notify parent components that an NFT was minted
+      window.dispatchEvent(new CustomEvent('nft_minted', { detail: mockNft }));
+      
+      // Call the callback if provided
+      if (typeof onNFTMinted === 'function') {
+        onNFTMinted(mockNft);
+      }
+      
+      // API call can still be attempted but we don't depend on it
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://polkadot-attendance-nft-api.onrender.com';
+      
+      try {
+        await fetch(`${apiUrl}/api/webhook/check-in`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            event_id: formData.eventId,
+            attendee_id: formData.attendeeId,
+            timestamp: new Date().toISOString()
+          })
+        });
+      } catch (apiErr) {
+        console.log('API call failed, but using local mock data instead', apiErr);
+      }
+      
       setSuccess(true);
-      console.log('Simulated check-in successful:', data);
+      console.log('Simulated check-in successful, created mock NFT:', mockNft);
     } catch (err) {
       setError(err.message || 'An error occurred');
       console.error('Error simulating check-in:', err);
@@ -99,17 +181,26 @@ const MockCheckInSimulator = () => {
         
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Event ID"
-              name="eventId"
-              value={formData.eventId}
-              onChange={handleChange}
-              margin="normal"
-              variant="outlined"
-              size="small"
-              helperText="Luma event identifier"
-            />
+            <FormControl fullWidth variant="outlined" size="small" margin="normal">
+              <InputLabel id="event-select-label">Event</InputLabel>
+              <Select
+                labelId="event-select-label"
+                id="event-select"
+                value={formData.eventId}
+                name="eventId"
+                onChange={handleChange}
+                label="Event"
+              >
+                {availableEvents.map(event => (
+                  <MenuItem key={event.id} value={event.id}>
+                    {event.name}
+                  </MenuItem>
+                ))}
+                {availableEvents.length === 0 && (
+                  <MenuItem value="luma123">Demo Event</MenuItem>
+                )}
+              </Select>
+            </FormControl>
           </Grid>
           
           <Grid item xs={12} md={6}>

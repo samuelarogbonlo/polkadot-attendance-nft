@@ -45,19 +45,37 @@ const MockCheckInSimulator = () => {
     setSuccess(false);
 
     try {
-      // Simulate successful check-in (no actual API call needed in mock mode)
-      // This will just show the success message without actually calling the backend
+      // Use the deployed backend API URL
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://polkadot-attendance-nft-api.onrender.com';
       
-      setTimeout(() => {
-        setSuccess(true);
-        setLoading(false);
-        console.log('Simulated check-in successful (mock mode)');
-      }, 1000);
-      
-      return;
+      // Send a simulated check-in event to the backend
+      const response = await fetch(`${apiUrl}/api/webhook/check-in`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event_id: formData.eventId,
+          attendee_id: formData.attendeeId,
+          timestamp: new Date().toISOString()
+        })
+      });
+
+      // Check if the backend is in mock mode (will always return success)
+      // or if it's connected to the real blockchain
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to simulate check-in');
+      }
+
+      setSuccess(true);
+      console.log('Simulated check-in successful:', data);
     } catch (err) {
       setError(err.message || 'An error occurred');
       console.error('Error simulating check-in:', err);
+    } finally {
+      setLoading(false);
     }
   };
 

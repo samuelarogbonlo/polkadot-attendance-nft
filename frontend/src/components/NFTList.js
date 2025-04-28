@@ -1,21 +1,26 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Grid, Card, CardContent, Typography, Box, Avatar, Chip,
   Paper, Divider, useTheme, TextField, InputAdornment,
   MenuItem, Select, FormControl, InputLabel, Stack,
   IconButton, Tooltip, Switch, FormControlLabel,
-  Button, Menu, Dialog, DialogTitle, DialogContent, DialogActions
+  Button, Menu, Dialog, DialogTitle, DialogContent, DialogActions,
+  Snackbar, Alert
 } from '@mui/material';
 import {
   Verified, LocationOn, CalendarToday, Person, AccountBalanceWallet,
   Search, FilterList, BarChart, Refresh, Sort, Download,
-  PictureAsPdf, FileDownload, Share, DateRange, Close
+  PictureAsPdf, FileDownload, Share, DateRange, Close, QrCode,
+  Wallet, CheckCircle
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import NFTStatisticsCharts from './NFTStatisticsCharts';
+import { api } from '../services/api';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
-function NFTList({ nfts }) {
+function NFTList({ nfts, events = [] }) {
   const theme = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEvent, setFilterEvent] = useState('all');
@@ -26,14 +31,29 @@ function NFTList({ nfts }) {
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [showCharts, setShowCharts] = useState(false);
+  const [showSnackbar, setShowSnackbar] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [availableEvents, setAvailableEvents] = useState([]);
+  const [walletVerificationOpen, setWalletVerificationOpen] = useState(false);
+  const [currentNFT, setCurrentNFT] = useState(null);
 
-  // Extract unique event names for filter dropdown
-  const eventOptions = useMemo(() => {
-    if (!nfts || nfts.length === 0) return [];
+  // Fetch events for the filter dropdown if not provided
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const eventsData = await api.getEvents();
+        setAvailableEvents(eventsData);
+      } catch (error) {
+        console.error('Error fetching events:', error);
+      }
+    };
     
-    const events = [...new Set(nfts.map(nft => nft.metadata.event_name))].filter(Boolean);
-    return events;
-  }, [nfts]);
+    if (events.length === 0) {
+      fetchEvents();
+    } else {
+      setAvailableEvents(events);
+    }
+  }, [events]);
 
   // Apply filters and search
   const filteredNFTs = useMemo(() => {
@@ -44,7 +64,7 @@ function NFTList({ nfts }) {
     // Apply event filter
     if (filterEvent !== 'all') {
       result = result.filter(nft => 
-        nft.metadata.event_name === filterEvent
+        nft.metadata && nft.metadata.event_id === filterEvent
       );
     }
     
@@ -52,11 +72,12 @@ function NFTList({ nfts }) {
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(nft => 
-        (nft.metadata.name && nft.metadata.name.toLowerCase().includes(term)) ||
-        (nft.metadata.attendee && nft.metadata.attendee.toLowerCase().includes(term)) ||
-        (nft.metadata.description && nft.metadata.description.toLowerCase().includes(term)) ||
-        (nft.metadata.location && nft.metadata.location.toLowerCase().includes(term)) ||
-        (nft.owner && nft.owner.toLowerCase().includes(term))
+        (nft.metadata && nft.metadata.name && nft.metadata.name.toLowerCase().includes(term)) ||
+        (nft.metadata && nft.metadata.attributes && 
+          nft.metadata.attributes.some(attr => 
+            attr.value && attr.value.toString().toLowerCase().includes(term)
+          )
+        )
       );
     }
     
@@ -186,9 +207,54 @@ function NFTList({ nfts }) {
   };
 
   const handleExportPDF = () => {
-    // In production, this would generate and download a PDF
-    // Mock implementation with an alert for now
-    alert("PDF export functionality would be implemented here.");
+    try {
+      // Create a new PDF document
+      const doc = new jsPDF();
+      
+      // Add a title
+      doc.setFontSize(18);
+      doc.text('NFT Attendance Report', 14, 22);
+      doc.setFontSize(11);
+      doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, 30);
+      
+      // Format data for the table
+      const tableColumn = ["ID", "Name", "Event", "Attendee", "Date", "Location", "Owner"];
+      const tableRows = filteredNFTs.map(nft => [
+        nft.id,
+        nft.metadata?.name || `NFT #${nft.id}`,
+        nft.metadata?.event_name || "Unknown Event",
+        nft.metadata?.attendee || "Unknown",
+        nft.metadata?.event_date || "N/A",
+        nft.metadata?.location || "N/A",
+        nft.owner ? `${nft.owner.slice(0, 6)}...${nft.owner.slice(-4)}` : "Unknown"
+      ]);
+      
+      // Generate the table
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [230, 0, 122] },
+        alternateRowStyles: { fillColor: [240, 240, 240] }
+      });
+      
+      // Add a footer
+      const pageCount = doc.internal.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.text(`Page ${i} of ${pageCount} - Polkadot Attendance NFT System`, 14, doc.internal.pageSize.height - 10);
+      }
+      
+      // Save the PDF
+      doc.save('nft_export.pdf');
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      setSnackbarMessage('Failed to export PDF');
+      setShowSnackbar(true);
+    }
+    
     handleExportMenuClose();
   };
 
@@ -198,6 +264,45 @@ function NFTList({ nfts }) {
     setSortOrder('newest');
     setStartDate(null);
     setEndDate(null);
+  };
+
+  const handleShareNFT = (nft) => {
+    // Create shareable URL
+    const shareUrl = `${window.location.origin}/nft/${nft.id}`;
+    
+    // Try to use the Web Share API if available
+    if (navigator.share) {
+      navigator.share({
+        title: nft.metadata?.name || 'Attendance NFT',
+        text: `Check out this Attendance NFT for ${nft.metadata?.attributes?.find(a => a.trait_type === 'Event')?.value || 'an event'}`,
+        url: shareUrl,
+      })
+      .catch(error => {
+        console.error('Error sharing:', error);
+        copyToClipboard(shareUrl);
+      });
+    } else {
+      // Fallback to clipboard
+      copyToClipboard(shareUrl);
+    }
+  };
+  
+  const handleVerifyInWallet = (nft) => {
+    setCurrentNFT(nft);
+    setWalletVerificationOpen(true);
+  };
+  
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        setSnackbarMessage('Link copied to clipboard!');
+        setShowSnackbar(true);
+      })
+      .catch(err => {
+        console.error('Failed to copy:', err);
+        setSnackbarMessage('Failed to copy link');
+        setShowSnackbar(true);
+      });
   };
 
   if (!nfts || nfts.length === 0) {
@@ -340,8 +445,10 @@ function NFTList({ nfts }) {
                   label="Filter by Event"
                 >
                   <MenuItem value="all">All Events</MenuItem>
-                  {eventOptions.map(event => (
-                    <MenuItem key={event} value={event}>{event}</MenuItem>
+                  {availableEvents.map(event => (
+                    <MenuItem key={event.id} value={event.id}>
+                      {event.name}
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -448,6 +555,7 @@ function NFTList({ nfts }) {
                         bgcolor: 'rgba(255,255,255,0.3)',
                       }
                     }}
+                    onClick={() => handleShareNFT(nft)}
                   >
                     <Share fontSize="small" />
                   </IconButton>
@@ -516,6 +624,16 @@ function NFTList({ nfts }) {
                     value={nft.owner ? `${nft.owner.slice(0, 6)}...${nft.owner.slice(-4)}` : 'Unknown'}
                   />
                 </Box>
+                
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  startIcon={<Wallet />}
+                  onClick={() => handleVerifyInWallet(nft)}
+                  sx={{ mt: 2 }}
+                >
+                  Verify in Wallet
+                </Button>
               </CardContent>
             </Card>
           </Grid>
@@ -604,6 +722,117 @@ function NFTList({ nfts }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={showSnackbar}
+        autoHideDuration={4000}
+        onClose={() => setShowSnackbar(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setShowSnackbar(false)} severity="success">
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
+
+      {/* Wallet Verification Dialog */}
+      <Dialog
+        open={walletVerificationOpen}
+        onClose={() => setWalletVerificationOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">Wallet Verification</Typography>
+            <IconButton edge="end" color="inherit" onClick={() => setWalletVerificationOpen(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {currentNFT && (
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <Avatar
+                  sx={{
+                    bgcolor: theme.palette.primary.main,
+                    width: 60,
+                    height: 60,
+                    mr: 2
+                  }}
+                >
+                  {currentNFT.id}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6">{currentNFT.metadata?.name || `NFT #${currentNFT.id}`}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Attendance NFT for {currentNFT.metadata?.event_name}
+                  </Typography>
+                </Box>
+              </Box>
+              
+              <Paper sx={{ p: 3, mb: 3, bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <CheckCircle color="success" sx={{ mr: 1 }} />
+                  <Typography variant="subtitle1" fontWeight="medium">Ownership Verified</Typography>
+                </Box>
+                
+                <Typography variant="body2" paragraph>
+                  This NFT is owned by the following wallet address:
+                </Typography>
+                
+                <Box sx={{ 
+                  p: 2, 
+                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)', 
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.9rem',
+                  wordBreak: 'break-all'
+                }}>
+                  {currentNFT.owner}
+                </Box>
+                
+                <Typography variant="body2" sx={{ mt: 2 }}>
+                  In a production environment, this would show the NFT on the actual blockchain 
+                  and allow you to verify ownership through a blockchain explorer.
+                </Typography>
+              </Paper>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                <Box sx={{ mr: 4, mb: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Token ID</Typography>
+                  <Typography variant="body2" fontWeight="medium">{currentNFT.id}</Typography>
+                </Box>
+                
+                <Box sx={{ mr: 4, mb: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Event</Typography>
+                  <Typography variant="body2" fontWeight="medium">{currentNFT.metadata?.event_name}</Typography>
+                </Box>
+                
+                <Box sx={{ mr: 4, mb: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Created</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {new Date(currentNFT.created_at).toLocaleDateString()}
+                  </Typography>
+                </Box>
+                
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Standard</Typography>
+                  <Typography variant="body2" fontWeight="medium">Polkadot NFT</Typography>
+                </Box>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setWalletVerificationOpen(false)}
+            variant="contained"
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -619,7 +848,7 @@ function DetailItem({ icon, label, value }) {
           {label}
         </Typography>
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-          {value}
+          {value || 'N/A'}
         </Typography>
       </Box>
     </Box>

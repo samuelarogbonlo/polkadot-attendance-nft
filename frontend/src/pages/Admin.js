@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import EventForm from '../components/EventForm';
 import EventList from '../components/EventList';
@@ -55,32 +55,53 @@ function Admin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      
-      try {
-        const [eventsData, nftsData] = await Promise.all([
-          api.getEvents(),
-          api.getNFTs()
-        ]);
-        
-        // Process data
-        setEvents(eventsData);
-        setNFTs(nftsData);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setError('Failed to load data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Function to fetch all data - made reusable so it can be called after NFT minting
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     
-    fetchData();
+    try {
+      const [eventsData, nftsData] = await Promise.all([
+        api.getEvents(),
+        api.getNFTs()
+      ]);
+      
+      // Process data
+      setEvents(eventsData);
+      setNFTs(nftsData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError('Failed to load data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchData();
+
+    // Listen for NFT minting events
+    window.addEventListener('nft_minted', fetchData);
+    
+    return () => {
+      window.removeEventListener('nft_minted', fetchData);
+    };
+  }, [fetchData]);
+
+  // Function to handle NFT minting from MockCheckInSimulator
+  const handleNFTMinted = useCallback(() => {
+    console.log('NFT minted, refreshing data...');
+    fetchData();
+  }, [fetchData]);
+
   const handleEventCreated = (newEvent) => {
-    setEvents([...events, newEvent]);
+    // Check if the event already exists in our state to prevent duplicates
+    const eventExists = events.some(e => e.id === newEvent.id);
+    if (!eventExists) {
+      console.log('Adding new event to state:', newEvent.id);
+      setEvents(prevEvents => [...prevEvents, newEvent]);
+    } else {
+      console.log('Event already exists in state, not adding duplicate:', newEvent.id);
+    }
   };
 
   const handleTabChange = (event, newValue) => {
@@ -328,7 +349,24 @@ function Admin() {
                 Since the application is currently running in demo mode (using mock data), you can use these tools to test the full workflow.
               </Alert>
               
-              <MockCheckInSimulator />
+              <MockCheckInSimulator onNFTMinted={handleNFTMinted} />
+
+              <Button
+                variant="contained"
+                startIcon={<QrCode2 />}
+                onClick={() => {/* Import functionality would go here */}}
+                sx={{ 
+                  mt: 3,
+                  borderRadius: 2,
+                  backgroundColor: theme.palette.mode === 'dark' ? '#E6007A' : '#8B00BF',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: theme.palette.mode === 'dark' ? '#D0006A' : '#7A00AF',
+                  }
+                }}
+              >
+                Import from Luma
+              </Button>
             </CardContent>
           </Card>
         </TabPanel>

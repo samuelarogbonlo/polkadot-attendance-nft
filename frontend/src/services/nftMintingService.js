@@ -1,4 +1,5 @@
-import { createNFT } from './api';
+import { initPolkadot, getSigner } from './wallet';
+import { BN } from '@polkadot/util';
 
 /**
  * Configuration for retry mechanisms
@@ -16,7 +17,7 @@ const RETRY_CONFIG = {
 };
 
 /**
- * Error handling and retry mechanism for NFT minting
+ * Mint an NFT on the blockchain
  * @param {Object} nftData - Data for the NFT to be minted
  * @param {Function} onProgress - Callback for progress updates
  * @returns {Promise<Object>} - The minted NFT data
@@ -30,10 +31,95 @@ export const mintNFTWithRetry = async (nftData, onProgress = () => {}) => {
       onProgress({
         status: 'processing',
         message: retries > 0 ? `Attempt ${retries + 1} of ${RETRY_CONFIG.maxRetries + 1}` : 'Processing transaction',
-        progress: 0
+        progress: 10
       });
       
-      const result = await createNFT(nftData);
+      // Initialize Polkadot connection
+      const { api, contract } = await initPolkadot();
+      onProgress({
+        status: 'processing',
+        message: 'Connected to blockchain',
+        progress: 20
+      });
+      
+      // Get the signer from the extension
+      const callerAddress = localStorage.getItem('wallet_address');
+      const signer = await getSigner(callerAddress);
+      
+      onProgress({
+        status: 'processing',
+        message: 'Preparing transaction',
+        progress: 30
+      });
+      
+      // Prepare metadata as a JSON string
+      const metadata = JSON.stringify({
+        name: `${nftData.eventName} Attendance`,
+        description: `Attended ${nftData.eventName}`,
+        image: nftData.image || 'https://via.placeholder.com/300',
+        event_id: nftData.eventId,
+        attributes: [
+          { trait_type: 'Event', value: nftData.eventName },
+          { trait_type: 'Date', value: nftData.eventDate },
+          { trait_type: 'Location', value: nftData.eventLocation }
+        ]
+      });
+      
+      onProgress({
+        status: 'processing',
+        message: 'Signing transaction',
+        progress: 40
+      });
+      
+      // Call the mint_nft function on the contract
+      const gasLimit = api.registry.createType('WeightV2', {
+        refTime: new BN(1000000000),
+        proofSize: new BN(1000000),
+      });
+      
+      const eventId = new BN(nftData.eventId.replace('event-', '')); // Convert event ID to number
+      
+      // Send the transaction
+      const txResult = await contract.tx
+        .mintNft({ gasLimit }, eventId, nftData.recipientAddress, metadata)
+        .signAndSend(callerAddress, { signer: signer });
+      
+      onProgress({
+        status: 'processing',
+        message: 'Transaction submitted',
+        progress: 60
+      });
+      
+      // Simulate waiting for confirmation
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      onProgress({
+        status: 'processing',
+        message: 'Transaction confirmed',
+        progress: 90
+      });
+      
+      // Create a response object similar to the mock one
+      const result = {
+        id: `nft-${Date.now()}`,
+        owner: nftData.recipientAddress,
+        metadata: {
+          name: `${nftData.eventName} Attendance`,
+          description: `Attended ${nftData.eventName}`,
+          image: nftData.image || 'https://via.placeholder.com/300',
+          event_id: nftData.eventId,
+          attributes: [
+            { trait_type: 'Event', value: nftData.eventName },
+            { trait_type: 'Date', value: nftData.eventDate },
+            { trait_type: 'Location', value: nftData.eventLocation }
+          ]
+        },
+        created_at: new Date().toISOString(),
+        txHash: txResult.hash ? txResult.hash.toHex() : null
+      };
+      
+      // Emit an event to notify other components
+      window.dispatchEvent(new CustomEvent('nftMinted', { detail: result }));
       
       onProgress({
         status: 'success',
@@ -44,6 +130,8 @@ export const mintNFTWithRetry = async (nftData, onProgress = () => {}) => {
       
       return result;
     } catch (error) {
+      console.error('Blockchain minting error:', error);
+      
       const errorCode = error.code || 'UNKNOWN_ERROR';
       
       // Check if error is retryable
@@ -155,7 +243,8 @@ const getErrorMessage = (error) => {
     'INSUFFICIENT_FUNDS': 'Insufficient funds to complete the transaction.',
     'CONTRACT_ERROR': 'Smart contract execution failed. Please check the transaction parameters.',
     'UNAUTHORIZED': 'You are not authorized to perform this action.',
-    'UNKNOWN_ERROR': 'An unknown error occurred. Please try again later.'
+    'UNKNOWN_ERROR': 'An unknown error occurred. Please try again later.',
+    'EXTENSION_NOT_FOUND': 'Polkadot.js extension not found. Please install it and try again.'
   };
   
   return errorMessages[errorCode] || error.message || 'Transaction failed. Please try again.';

@@ -1,13 +1,28 @@
-import { web3Accounts, web3Enable } from '@polkadot/extension-dapp';
+import { web3Accounts, web3Enable, web3FromAddress } from '@polkadot/extension-dapp';
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { ContractPromise } from '@polkadot/api-contract';
 
+// Contract address from backend config
+const CONTRACT_ADDRESS = '5E34VfGGLfR7unMf9UH6xCtsoKy7sgLiGzUXC47Mv2U5uB28';
 // Polkadot RPC endpoint
-const RPC_ENDPOINT = process.env.REACT_APP_POLKADOT_RPC || 'wss://rpc.polkadot.io';
+const RPC_ENDPOINT = process.env.REACT_APP_POLKADOT_RPC || 'wss://ws.test.azero.dev';
 const APP_NAME = 'Polkadot Attendance NFT';
+
+// Contract ABI
+let contractAbi = null;
 
 // Initialize Polkadot API and extension
 export const initPolkadot = async () => {
   try {
+    // Load contract ABI
+    if (!contractAbi) {
+      const response = await fetch('/contract-abi.json');
+      if (!response.ok) {
+        throw new Error('Failed to load contract ABI');
+      }
+      contractAbi = await response.json();
+    }
+
     // Enable the extension
     const extensions = await web3Enable(APP_NAME);
 
@@ -18,8 +33,11 @@ export const initPolkadot = async () => {
     // Connect to Polkadot node
     const provider = new WsProvider(RPC_ENDPOINT);
     const api = await ApiPromise.create({ provider });
+    
+    // Initialize contract
+    const contract = new ContractPromise(api, contractAbi, CONTRACT_ADDRESS);
 
-    return { api, extensions };
+    return { api, extensions, contract };
   } catch (error) {
     console.error('Failed to initialize Polkadot connection:', error);
     throw error;
@@ -38,6 +56,18 @@ export const getAccounts = async () => {
     }));
   } catch (error) {
     console.error('Failed to get accounts:', error);
+    throw error;
+  }
+};
+
+// Get signer for an account
+export const getSigner = async (address) => {
+  try {
+    await web3Enable(APP_NAME);
+    const injector = await web3FromAddress(address);
+    return injector.signer;
+  } catch (error) {
+    console.error('Failed to get signer:', error);
     throw error;
   }
 };
