@@ -19,6 +19,7 @@ type Client struct {
 
 // NewClient creates a new Polkadot client
 func NewClient(rpcURL, contractAddress string) *Client {
+	log.Printf("Connecting to %s...", rpcURL)
 	// Connect to Polkadot node
 	api, err := gsrpc.NewSubstrateAPI(rpcURL)
 	if err != nil {
@@ -33,6 +34,21 @@ func NewClient(rpcURL, contractAddress string) *Client {
 	// Parse contract address if provided
 	var contractAddr types.AccountID
 	if contractAddress != "" {
+		// Handle Substrate format address (starting with 5)
+		if len(contractAddress) > 0 && contractAddress[0] == '5' {
+			// For Substrate addresses, use a different approach
+			log.Printf("Using Substrate format address: %s", contractAddress)
+			
+			// For development, continue with mock implementation
+			// In production, implement proper Substrate address handling here
+			log.Printf("Substrate address format used in mock mode")
+			return &Client{
+				api:            api,
+				contractCaller: NewMockContractCaller(),
+			}
+		}
+		
+		// Handle Ethereum/hex format addresses
 		// Remove 0x prefix if present
 		if len(contractAddress) > 2 && contractAddress[:2] == "0x" {
 			contractAddress = contractAddress[2:]

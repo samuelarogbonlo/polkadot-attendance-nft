@@ -1,10 +1,14 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+// Use environment variable if available, otherwise use localhost/mock
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 // Maximum number of retries for API calls
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
+
+// By default use mock data since we don't have backend deployed yet
+localStorage.setItem('use_mock_data', 'true');
 
 // Mock data for development/offline use
 const MOCK_DATA = {
@@ -62,16 +66,17 @@ const MOCK_DATA = {
   ]
 };
 
-// Create axios instance
-const axiosInstance = axios.create({
-  baseURL: API_URL,
+// Create axios instance with common configuration
+const apiClient = axios.create({
+  baseURL: `${BASE_URL}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 seconds timeout
 });
 
 // Add request interceptor to add auth token to all requests
-axiosInstance.interceptors.request.use(
+apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('auth_token');
     if (token) {
@@ -135,7 +140,7 @@ export const api = {
     }
     
     try {
-      const response = await axiosInstance.post('/api/auth', { 
+      const response = await apiClient.post('/auth', { 
         walletAddress, 
         message, 
         signature 
@@ -179,7 +184,7 @@ export const api = {
   getEvents: async () => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.get('/api/admin/events');
+        const response = await apiClient.get('/admin/events');
         return response.data;
       },
       MOCK_DATA.events
@@ -189,7 +194,7 @@ export const api = {
   getEvent: async (id) => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.get(`/api/admin/events/${id}`);
+        const response = await apiClient.get(`/admin/events/${id}`);
         return response.data;
       },
       () => MOCK_DATA.events.find(event => event.id === id) || null
@@ -199,7 +204,7 @@ export const api = {
   createEvent: async (eventData) => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.post('/api/admin/events', eventData);
+        const response = await apiClient.post('/admin/events', eventData);
         return response.data;
       },
       () => {
@@ -218,7 +223,7 @@ export const api = {
   getNFTs: async () => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.get('/api/admin/nfts');
+        const response = await apiClient.get('/admin/nfts');
         return response.data;
       },
       MOCK_DATA.nfts
@@ -228,7 +233,7 @@ export const api = {
   getNFTsByEvent: async (eventId) => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.get('/api/admin/nfts');
+        const response = await apiClient.get('/admin/nfts');
         return response.data.filter(nft => 
           nft.metadata && nft.metadata.event_id === eventId
         );
@@ -242,7 +247,7 @@ export const api = {
   createNFT: async (nftData) => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.post('/api/admin/nfts', nftData);
+        const response = await apiClient.post('/admin/nfts', nftData);
         return response.data;
       },
       () => {
@@ -260,7 +265,7 @@ export const api = {
   mintNFT: async (eventId, attendeeData) => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.post(`/api/admin/events/${eventId}/mint`, attendeeData);
+        const response = await apiClient.post(`/admin/events/${eventId}/mint`, attendeeData);
         return response.data;
       },
       () => {
@@ -293,7 +298,7 @@ export const api = {
   batchMintNFTs: async (eventId, attendeesData) => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.post(`/api/admin/events/${eventId}/batch-mint`, { attendees: attendeesData });
+        const response = await apiClient.post(`/admin/events/${eventId}/batch-mint`, { attendees: attendeesData });
         return response.data;
       },
       () => {
@@ -328,7 +333,7 @@ export const api = {
   configureWebhook: async (eventId, webhookUrl) => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.post(`/api/admin/events/${eventId}/webhook`, { url: webhookUrl });
+        const response = await apiClient.post(`/admin/events/${eventId}/webhook`, { url: webhookUrl });
         return response.data;
       },
       { success: true, message: 'Webhook configured (mock)' }
@@ -338,7 +343,7 @@ export const api = {
   testWebhook: async (eventId) => {
     return apiCallWithRetry(
       async () => {
-        const response = await axiosInstance.post(`/api/admin/events/${eventId}/test-webhook`);
+        const response = await apiClient.post(`/admin/events/${eventId}/test-webhook`);
         return response.data;
       },
       { success: true, message: 'Test webhook sent (mock)' }
@@ -352,7 +357,7 @@ export const api = {
     }
     
     try {
-      const response = await axiosInstance.get('/health');
+      const response = await apiClient.get('/health');
       return response.data.status === 'ok';
     } catch (error) {
       console.error('Health check failed:', error);

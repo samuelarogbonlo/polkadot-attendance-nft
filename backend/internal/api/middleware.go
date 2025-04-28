@@ -14,30 +14,9 @@ import (
 
 // BasicAuthMiddleware provides basic authentication for admin routes
 func BasicAuthMiddleware(cfg *config.Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Get the Authorization header
-		auth := c.GetHeader("Authorization")
-		if auth == "" {
-			c.Header("WWW-Authenticate", "Basic realm=Authorization Required")
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization required"})
-			return
-		}
-
-		// Check if it's a Basic auth header
-		if !strings.HasPrefix(auth, "Basic ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authentication method"})
-			return
-		}
-
-		// Validate credentials
-		if !gin.BasicAuth(gin.Accounts{
-			cfg.AdminUsername: cfg.AdminPassword,
-		})(c) {
-			return
-		}
-
-		c.Next()
-	}
+	return gin.BasicAuth(gin.Accounts{
+		cfg.AdminUser: cfg.AdminPassword,
+	})
 }
 
 // RateLimiter defines a rate limiting middleware
@@ -95,6 +74,11 @@ func ValidateContractAddress(address string) string {
 	// If address is empty, return empty
 	if address == "" {
 		return ""
+	}
+
+	// If it's a Substrate address (starting with 5)
+	if strings.HasPrefix(address, "5") {
+		return address
 	}
 
 	// If address doesn't start with 0x, add it

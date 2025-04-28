@@ -23,9 +23,6 @@ func NewRouter(cfg *config.Config, client *polkadot.Client) *gin.Engine {
 		AllowCredentials: true,
 	}))
 
-	// Format contract address properly
-	formattedAddress := ValidateContractAddress(cfg.ContractAddress)
-
 	// Create clients
 	lumaClient := luma.NewClient(cfg.LumaAPIKey)
 

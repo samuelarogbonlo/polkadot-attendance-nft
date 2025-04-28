@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/models"
 	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/polkadot"
 )
 

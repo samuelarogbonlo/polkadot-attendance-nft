@@ -685,11 +685,20 @@ const WalletConnector = ({ onLogin }) => {
             
             <Button
               variant="outlined"
-              color="secondary"
               onClick={forceConnectWallet}
               disabled={loading}
               fullWidth
-              sx={{ mb: 2 }}
+              sx={{ 
+                mb: 2, 
+                color: 'primary.main',
+                borderColor: 'primary.main',
+                bgcolor: (theme) => 
+                  theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                '&:hover': {
+                  bgcolor: (theme) => 
+                    theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+                }
+              }}
             >
               Try Alternative Connection
             </Button>
@@ -698,6 +707,16 @@ const WalletConnector = ({ onLogin }) => {
               variant="outlined"
               onClick={toggleManualMode}
               fullWidth
+              sx={{
+                color: 'primary.main',
+                borderColor: 'primary.main',
+                bgcolor: (theme) => 
+                  theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                '&:hover': {
+                  bgcolor: (theme) => 
+                    theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+                }
+              }}
             >
               Manual Address Entry
             </Button>

@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom';
 import EventForm from '../components/EventForm';
 import EventList from '../components/EventList';
 import NFTList from '../components/NFTList';
+import MockCheckInSimulator from '../components/MockCheckInSimulator';
 import { api } from '../services/api';
 import { 
   Box, Tabs, Tab, Typography, Paper, Divider, CircularProgress, 
   Alert, AlertTitle, Button, Grid, Card, CardContent, useTheme, Fade 
 } from '@mui/material';
-import { ArrowBack, EventNote, Style } from '@mui/icons-material';
+import { ArrowBack, EventNote, Style, QrCode2 } from '@mui/icons-material';
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -191,6 +192,15 @@ function Admin() {
                   borderBottom: activeTab === 1 ? `3px solid ${theme.palette.primary.main}` : 'none',
                 }}
               />
+              <Tab 
+                icon={<QrCode2 />} 
+                label="Demo Tools" 
+                iconPosition="start"
+                disableRipple
+                sx={{ 
+                  borderBottom: activeTab === 2 ? `3px solid ${theme.palette.primary.main}` : 'none',
+                }}
+              />
             </Tabs>
           </Box>
         </Paper>
@@ -283,6 +293,42 @@ function Admin() {
               </Typography>
               <Divider sx={{ mb: 3 }} />
               <NFTList nfts={nfts} />
+            </CardContent>
+          </Card>
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={2}>
+          <Card sx={{ 
+            borderRadius: 2,
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? 'rgba(30, 30, 30, 0.85)' 
+              : 'rgba(255, 255, 255, 0.85)',
+            border: theme.palette.mode === 'dark'
+              ? '1px solid rgba(255, 255, 255, 0.05)'
+              : '1px solid rgba(0, 0, 0, 0.03)',
+          }} elevation={2}>
+            <CardContent sx={{ 
+              p: 3,
+              ...(theme.palette.mode === 'dark' && {
+                '& .MuiTypography-root.MuiTypography-h5': {
+                  color: theme.palette.primary.light
+                }
+              })
+            }}>
+              <Typography variant="h5" component="h2" gutterBottom color="primary">
+                Demonstration Tools
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>Demo Mode Active</AlertTitle>
+                The following tools simulate what would normally happen in a production environment with real Luma API integration.
+                Since the application is currently running in demo mode (using mock data), you can use these tools to test the full workflow.
+              </Alert>
+              
+              <MockCheckInSimulator />
             </CardContent>
           </Card>
         </TabPanel>
