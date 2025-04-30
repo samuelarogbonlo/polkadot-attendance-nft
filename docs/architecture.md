@@ -6,7 +6,6 @@ This document outlines the architecture of the Polkadot Attendance NFT System, d
 
 The Polkadot Attendance NFT System is designed to streamline the process of verifying event attendance and distributing commemorative NFTs. The platform enables event organizers to create events, generate QR codes for check-ins, and automatically mint NFTs for attendees who have checked in at the event.
 
-![System Architecture Diagram](../assets/system-architecture.png)
 
 ## Core Components
 
@@ -188,18 +187,9 @@ The system uses the following data models:
 - **IPFS** (optional): For storing NFT metadata
 - **Email Service** (optional): For notifications
 
-## Development and Deployment
-
-See the following documentation for detailed information:
-
-- [Development Guide](./development-guide.md)
-- [Production Deployment](./production-deployment.md)
-- [Testing Strategy](./testing-strategy.md)
 
 ## Future Enhancements
 
-- **Multi-chain Support**: Extend to other Substrate-based chains
 - **Advanced Analytics**: Track event attendance metrics
 - **Custom NFT Designs**: Allow organizers to customize NFT appearance
 - **Mobile App**: Develop native mobile applications
-- **Social Sharing**: Enable sharing NFTs on social media 

@@ -224,6 +224,164 @@ go get -u all
 
 4. Consider implementing Web Application Firewall (WAF) like ModSecurity or AWS WAF
 
+## Multi-Tenant Architecture Implementation
+
+For production deployments with multiple event organizers, we recommend implementing a multi-tenant architecture to ensure proper access control and data isolation.
+
+### Database Schema Updates
+
+1. Add an Organizations table:
+
+```sql
+CREATE TABLE organizations (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    logo_url VARCHAR(512),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+2. Add a Users table with organization relationships:
+
+```sql
+CREATE TABLE users (
+    wallet_address VARCHAR(64) PRIMARY KEY,
+    display_name VARCHAR(255),
+    email VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_login TIMESTAMP WITH TIME ZONE
+);
+
+CREATE TABLE organization_members (
+    organization_id UUID REFERENCES organizations(id),
+    wallet_address VARCHAR(64) REFERENCES users(wallet_address),
+    role VARCHAR(20) NOT NULL, -- 'admin', 'member', 'viewer'
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (organization_id, wallet_address)
+);
+```
+
+3. Update the Events table to include organization ownership:
+
+```sql
+ALTER TABLE events 
+ADD COLUMN organization_id UUID REFERENCES organizations(id);
+```
+
+### Backend Code Changes
+
+1. Update the event creation API to associate events with organizations:
+
+```go
+// In your event creation handler
+func (h *AdminHandler) CreateEvent(c *gin.Context) {
+    // Get the wallet address from the JWT token
+    walletAddress := c.GetString("walletAddress")
+    
+    // Get the organization ID from the request
+    var req CreateEventRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+    
+    // Verify the user has permission in this organization
+    hasPermission, err := h.db.CheckUserOrganizationRole(walletAddress, req.OrganizationID, []string{"admin", "member"})
+    if err != nil || !hasPermission {
+        c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to create events for this organization"})
+        return
+    }
+    
+    // Create the event with organization ID
+    event, err := h.db.CreateEvent(req.Name, req.Description, req.Date, req.Location, req.OrganizationID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    
+    c.JSON(http.StatusCreated, event)
+}
+```
+
+2. Add middleware to verify organization access:
+
+```go
+func OrganizationAccessMiddleware(db *database.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        // Get the wallet address from the JWT token
+        walletAddress := c.GetString("walletAddress")
+        
+        // Get the organization ID from the URL or request body
+        organizationID := c.Param("organizationId")
+        if organizationID == "" {
+            // Try to get it from the request body for POST requests
+            if c.Request.Method == "POST" {
+                var req struct {
+                    OrganizationID string `json:"organizationId"`
+                }
+                if err := c.ShouldBindJSON(&req); err == nil {
+                    organizationID = req.OrganizationID
+                }
+            }
+        }
+        
+        // If we still don't have an organization ID, continue
+        // (the handler will need to handle this case)
+        if organizationID == "" {
+            c.Next()
+            return
+        }
+        
+        // Check if the user has access to this organization
+        hasAccess, err := db.CheckUserOrganizationAccess(walletAddress, organizationID)
+        if err != nil || !hasAccess {
+            c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You don't have access to this organization's resources"})
+            return
+        }
+        
+        c.Next()
+    }
+}
+```
+
+### Frontend Updates
+
+1. Add organization selection UI to the admin dashboard.
+2. Update the event creation form to associate events with the selected organization.
+3. Filter events and NFTs based on the user's organizations.
+
+### API Endpoint Updates
+
+Add the following endpoints to manage organizations:
+
+```
+POST /api/organizations: Create a new organization
+GET /api/organizations: List user's organizations
+GET /api/organizations/:id: Get organization details
+PUT /api/organizations/:id: Update organization details
+POST /api/organizations/:id/members: Add a member to an organization
+DELETE /api/organizations/:id/members/:address: Remove a member from an organization
+PUT /api/organizations/:id/members/:address/role: Update a member's role
+```
+
+### Migration Plan
+
+1. Create the new database tables
+2. Modify the backend code to support the multi-tenant model
+3. Update the frontend to include organization management
+4. For existing data, create a default organization and migrate all events to it
+5. Assign all existing users as admins of the default organization
+
+### Testing
+
+Before deploying to production, thoroughly test:
+- Organization creation and management
+- User permissions within organizations
+- Event isolation between organizations
+- Access control for organization resources
+
 ## Monitoring and Logging
 
 1. Set up application logging to a centralized logging system:

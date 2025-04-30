@@ -22,169 +22,123 @@ The system consists of:
 2. **Backend API**: Go service handling Luma webhook integration and NFT minting
 3. **Frontend**: React-based dashboard for event management
 
-## Prerequisites
+# Polkadot Attendance NFT - Feature Verification Guide
 
-- [Rust](https://www.rust-lang.org/tools/install) with `nightly` toolchain
-- [cargo-contract](https://github.com/paritytech/cargo-contract) for ink! contract compilation
-- [Go](https://golang.org/doc/install) 1.20 or higher
-- [Node.js](https://nodejs.org/) 16.x or higher
-- [Polkadot.js Extension](https://polkadot.js.org/extension/) for wallet interaction
-- Access to a Polkadot node (local or remote)
-- Luma platform account with API access
+This guide will help you verify that all features of the Polkadot Attendance NFT application are working correctly. No technical knowledge is required!
 
-## Installation and Setup
+## Before You Begin
 
-### 1. Clone the repository
+1. **Install the Polkadot.js Extension**:
+   - Visit [Polkadot.js Extension](https://polkadot.js.org/extension/) and install it for your browser
+   - After installation, you should see a colorful 'P' icon in your browser toolbar
 
-```bash
-git clone https://github.com/yourusername/polkadot-attendance-nft.git
-cd polkadot-attendance-nft
-```
+2. **Create a Test Account**:
+   - Click the Polkadot.js extension icon in your browser
+   - Click the "+" button to create a new account
+   - Follow the prompts to save your account details
+   - **Note**: This is a testnet account, no real funds are involved
 
-### 2. Build and deploy the smart contract
+3. **Open the Application**:
+   - Go to [https://polkadot-attendance-nft.netlify.app](https://polkadot-attendance-nft.netlify.app)
 
-```bash
-# Install Rust and the ink! contract toolchain
-rustup default nightly
-rustup target add wasm32-unknown-unknown
-cargo install cargo-contract --force
+## Feature Verification Checklist
 
-# Build the contract
-cd contracts
-cargo +nightly contract build
-cd ..
+### 1. Wallet Connection
 
-# Deploy the contract (to a local development node)
-# For production, use the appropriate network and account
-node scripts/deploy_contract.js local alice
-```
+- [ ] Paste your wallet address and click "Connect Wallet" on the homepage
+- [ ] You should see a notification that you're connected to a testnet
+- [ ] After successful connection, you will be redirected to the admin dashboard
 
-### 3. Set up the backend server
+### 2. Dark/Light Mode
 
-```bash
-# Navigate to the backend directory
-cd backend
+- [ ] Look for a sun/moon icon in the top right corner
+- [ ] Click it to switch between dark and light modes
+- [ ] The entire interface should change colors
 
-# Build the backend
-go build -o attendance-nft ./cmd/server
+### 3. Event Creation
 
-# Run the server
-# For production, set the environment variables appropriately
-./attendance-nft
-```
+- [ ] On the Admin dashboard, find the "Create Event" form
+- [ ] Enter an event name (e.g., "Polkadot Demo Event")
+- [ ] Select a date using the calendar picker
+- [ ] Enter a location (e.g., "Virtual Conference")
+- [ ] Set a capacity (e.g., "100")
+- [ ] Click "Create Event"
+- [ ] You should see a transaction progress indicator
+- [ ] After completion, your new event should appear in the events list
 
-Configuration via environment variables:
+### 4. Event Management
 
-- `SERVER_ADDRESS`: HTTP server address (default: `:8080`)
-- `POLKADOT_RPC`: Polkadot node RPC endpoint (default: `wss://rpc.polkadot.io`)
-- `CONTRACT_ADDRESS`: Deployed contract address
-- `LUMA_API_KEY`: Luma API key
-- `LUMA_WEBHOOK_KEY`: Luma webhook signing key
+- [ ] Find your newly created event in the list
+- [ ] Click the pencil icon to edit the event
+- [ ] Change some details and save
+- [ ] The updated information should appear in the list
+- [ ] Click the QR code icon to see the event check-in QR code
+- [ ] The QR code should display in a popup
 
-Alternatively, create a `config.json` file in the backend directory:
+### 5. NFT Minting (Check-in Simulation)
 
-```json
-{
-  "server_address": ":8080",
-  "polkadot_rpc": "wss://rpc.polkadot.io",
-  "contract_address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
-  "luma_api_key": "your-luma-api-key",
-  "luma_webhook_key": "your-luma-webhook-key"
-}
-```
+- [ ] Click "Check-In" on your event in the event list
+- [ ] You'll see the "Mock Check-In Simulator" page
+- [ ] The event should be pre-selected based on which event you clicked
+- [ ] Enter a wallet address (or leave the pre-filled address)
+- [ ] Click "Simulate Check-In"
+- [ ] You should see a transaction progress indicator
+- [ ] After completion, a success message should appear
 
-### 4. Set up the frontend
+### 6. Viewing NFTs
 
-```bash
-# Navigate to the frontend directory
-cd frontend
+- [ ] Go to the "NFTs" tab in the navigation
+- [ ] You should see your newly minted NFT
+- [ ] Note the details like event name, attendee name, and wallet address
+- [ ] Try filtering NFTs by event or searching by name
+- [ ] Try sorting NFTs by different criteria
 
-# Install dependencies
-npm install
+### 7. Export Features
 
-# Create .env file
-echo "REACT_APP_API_URL=http://localhost:8080/api" > .env
-echo "REACT_APP_POLKADOT_RPC=wss://rpc.polkadot.io" >> .env
+- [ ] On the NFTs page, look for the download icon in the upper right
+- [ ] Click on the icon to open the export menu
+- [ ] Click "Export as CSV"
+- [ ] A CSV file should download with your NFT data
 
-# Start the development server
-npm start
-```
+### 8. Wallet Verification
 
-For production, build the frontend:
+- [ ] Click the "Verify in Wallet" button on any NFT card
+- [ ] A dialog should appear showing ownership verification details
+- [ ] Confirm the wallet address matches the one used during check-in
+- [ ] Close the verification dialog
+- [ ] You can also disconnect and reconnect with a different wallet address
 
-```bash
-npm run build
-```
+### 9. Public Gallery
 
-## Luma Integration
+- [ ] Visit the "Public Gallery" from the navigation
+- [ ] You should see a public view of the NFTs without needing wallet connection
+- [ ] Try filtering or sorting the gallery using the provided controls
 
-### Setting up Luma
+## What You've Just Verified
 
-1. Create an event on Luma platform
-2. Go to the event settings and find the API/Developer section
-3. Generate an API key for your event
-4. Set up a webhook to point to your backend: `https://your-server.com/api/webhook/check-in`
-5. Add a custom field for attendees to enter their Polkadot wallet address
+✅ **Blockchain Integration**: Events and NFTs are stored on the Polkadot blockchain
+✅ **Wallet Connectivity**: The app connects to Polkadot.js wallet extension
+✅ **Event Management**: Create, edit, and manage attendance events
+✅ **NFT Minting**: Generate attendance NFTs tied to specific wallet addresses
+✅ **Data Export**: Export data in CSV and PDF formats
+✅ **Wallet Verification**: Verify NFT ownership in connected wallets
+✅ **Responsive Design**: The interface works on different screen sizes
 
-### Testing the Integration
+## Production Notes
 
-1. Create an event in both Luma and the Attendance NFT system
-2. Register an attendee for the event with a valid Polkadot wallet address
-3. Use the Luma app to scan the attendee's QR code
-4. The system should mint an NFT and send it to the attendee's wallet
+In the production version of this application:
+- The check-in process would connect to the Luma API using API keys to fetch real attendee data
+- Real NFTs would be minted on the Polkadot blockchain
+- Wallet verification would query the blockchain for true ownership verification
+- The QR code would direct attendees to a check-in page connected to the event
 
-## Development
+## Troubleshooting
 
-### Running tests
+- If you see errors connecting to the blockchain, make sure your Polkadot.js extension is properly installed
+- If transactions take time, this is normal blockchain behavior - just wait a moment
+- If you need to reset, you can refresh the page and reconnect your wallet
 
-#### Smart Contract Tests
-
-```bash
-cd contracts
-cargo +nightly test
-```
-
-#### Backend Tests
-
-```bash
-cd backend
-go test ./...
-```
-
-#### Frontend Tests
-
-```bash
-cd frontend
-npm test
-```
-
-### Development Workflow
-
-For local development:
-
-1. Run a local Polkadot node:
-   ```bash
-   docker run -p 9944:9944 parity/polkadot:latest --dev --ws-external
-   ```
-
-2. Deploy the contract to the local node:
-   ```bash
-   node scripts/deploy_contract.js local alice
-   ```
-
-3. Run the backend and frontend in development mode
-
-## Deployment
-
-### Production Deployment Checklist
-
-1. Build and deploy the smart contract to the appropriate Polkadot network
-2. Set up secure key management for the contract deployer account
-3. Configure environment variables for production
-4. Build and deploy the backend server
-5. Set up HTTPS for the backend API
-6. Build and deploy the frontend to a static hosting service
-7. Configure Luma webhooks with the production backend URL
+Thank you for verifying our application! 
 
 ## License
 
