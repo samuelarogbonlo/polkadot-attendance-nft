@@ -1,70 +1,87 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/config"
+	"github.com/patrickmn/go-cache"
+	"strconv"
 )
 
 // BasicAuthMiddleware provides basic authentication for admin routes
 func BasicAuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return gin.BasicAuth(gin.Accounts{
-		cfg.AdminUser: cfg.AdminPassword,
+		cfg.AdminUsername: cfg.AdminPassword,
 	})
 }
 
-// RateLimiter defines a rate limiting middleware
-type RateLimiter struct {
-	requests      map[string][]time.Time
-	mutex         sync.Mutex
-	requestsLimit int
-	timeWindow    time.Duration
-}
-
-// NewRateLimiter creates a new rate limiter
-func NewRateLimiter(requestsPerMinute int) *RateLimiter {
-	return &RateLimiter{
-		requests:      make(map[string][]time.Time),
-		mutex:         sync.Mutex{},
-		requestsLimit: requestsPerMinute,
-		timeWindow:    time.Minute,
-	}
-}
-
-// RateLimitMiddleware provides rate limiting functionality
-func (rl *RateLimiter) RateLimitMiddleware() gin.HandlerFunc {
+// CorsMiddleware adds CORS headers to responses
+func CorsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rl.mutex.Lock()
-		defer rl.mutex.Unlock()
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 
-		now := time.Now()
-		ip := c.ClientIP()
-
-		// Remove old timestamps
-		var recent []time.Time
-		for _, t := range rl.requests[ip] {
-			if now.Sub(t) <= rl.timeWindow {
-				recent = append(recent, t)
-			}
-		}
-		rl.requests[ip] = recent
-
-		// Check if limit reached
-		if len(recent) >= rl.requestsLimit {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "Rate limit exceeded. Try again later.",
-			})
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
-		// Add current request timestamp
-		rl.requests[ip] = append(rl.requests[ip], now)
+		c.Next()
+	}
+}
+
+// Rate limiter cache
+var requestCache = cache.New(5*time.Minute, 10*time.Minute)
+
+// RateLimiter limits request rate by IP address
+func RateLimiter(enabled bool, requestsPerMinute int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Skip if rate limiting is disabled
+		if !enabled {
+			c.Next()
+			return
+		}
+
+		// Get client IP
+		ip := c.ClientIP()
+		
+		// Get current minute as cache key
+		minute := time.Now().Format("2006-01-02 15:04")
+		key := ip + ":" + minute
+		
+		// Check if key exists
+		count, found := requestCache.Get(key)
+		if !found {
+			// First request this minute
+			requestCache.Set(key, 1, cache.DefaultExpiration)
+			c.Next()
+			return
+		}
+		
+		// Check rate limit
+		reqCount := count.(int)
+		if reqCount >= requestsPerMinute {
+			c.Header("Retry-After", "60")
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "Rate limit exceeded. Try again in 60 seconds.",
+			})
+			return
+		}
+		
+		// Increment request count
+		requestCache.Set(key, reqCount+1, cache.DefaultExpiration)
+		
+		// Add rate limit headers
+		c.Header("X-RateLimit-Limit", strconv.Itoa(requestsPerMinute))
+		c.Header("X-RateLimit-Remaining", strconv.Itoa(requestsPerMinute-reqCount-1))
+		
 		c.Next()
 	}
 }
@@ -89,45 +106,59 @@ func ValidateContractAddress(address string) string {
 	return address
 }
 
-// JWTAuthMiddleware validates the JWT token in the Authorization header
-func JWTAuthMiddleware(jwtSecret string) gin.HandlerFunc {
+// JWTAuth provides JWT authentication
+func JWTAuth(jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Get token from Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
 			return
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if !(len(parts) == 2 && parts[0] == "Bearer") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
+		// Extract token from "Bearer <token>"
+		tokenString := ""
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		} else {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format"})
 			return
 		}
 
-		tokenStr := parts[1]
-		claims := jwt.MapClaims{}
-
-		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		// Parse and validate token
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Validate signing method
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("unexpected signing method")
+				return nil, jwt.ErrSignatureInvalid
 			}
 			return []byte(jwtSecret), nil
 		})
 
-		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			return
 		}
 
-		// Add wallet address to context
-		walletAddress, ok := claims["walletAddress"].(string)
-		if !ok {
+		// Validate claims
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			// Check expiration
+			if exp, ok := claims["exp"].(float64); ok {
+				if int64(exp) < time.Now().Unix() {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token expired"})
+					return
+				}
+			}
+
+			// Set user ID from token claims
+			if userID, ok := claims["sub"].(string); ok {
+				c.Set("user_id", userID)
+			}
+
+			c.Next()
+		} else {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 			return
 		}
-		
-		c.Set("walletAddress", walletAddress)
-		c.Next()
 	}
 }
 

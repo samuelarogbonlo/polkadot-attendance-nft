@@ -3,57 +3,74 @@ package api
 import (
 	"net/http"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/config"
+	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/database"
 	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/luma"
 	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/polkadot"
 )
 
-// NewRouter creates a new router with all the routes defined
-func NewRouter(cfg *config.Config, client *polkadot.Client) *gin.Engine {
-	router := gin.Default()
+// NewRouter creates a new gin router with configured routes
+func NewRouter(
+	cfg *config.Config, 
+	polkadotClient *polkadot.Client,
+	eventRepo *database.EventRepository,
+	nftRepo *database.NFTRepository,
+	userRepo *database.UserRepository,
+	permRepo *database.PermissionRepository,
+) *gin.Engine {
+	r := gin.Default()
 
-	// Configure CORS
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-	}))
+	// Middleware
+	r.Use(CorsMiddleware())
+	r.Use(RateLimiter(cfg.RateLimit.Enabled, cfg.RateLimit.RequestsPerMinute))
 
-	// Create clients
-	lumaClient := luma.NewClient(cfg.LumaAPIKey)
-
-	// Create handlers
-	adminHandler := NewAdminHandler(client)
-	lumaHandler := NewLumaHandler(lumaClient, client, cfg.LumaWebhookKey)
-	authHandler := NewAuthHandler(cfg.JWTSecret)
-
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
+	// Health check
+	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Public auth routes
-	router.POST("/api/auth", authHandler.Authenticate)
+	// API routes
+	api := r.Group("/api")
 
-	// Admin routes - protected by JWT auth now
-	adminRoutes := router.Group("/api/admin")
-	adminRoutes.Use(JWTAuthMiddleware(cfg.JWTSecret))
+	// Public routes
 	{
-		adminRoutes.POST("/events", adminHandler.CreateEvent)
-		adminRoutes.GET("/events", adminHandler.ListEvents)
-		adminRoutes.GET("/events/:id", adminHandler.GetEvent)
-		adminRoutes.GET("/nfts", adminHandler.ListNFTs)
+		// Initialize handlers
+		lumaClient := luma.NewClient(cfg.LumaAPIKey)
+		lumaHandler := NewLumaHandler(lumaClient, polkadotClient, nftRepo, eventRepo, userRepo)
+
+		// Webhook endpoint for Luma check-ins
+		api.POST("/webhook/check-in", lumaHandler.CheckInWebhook)
 	}
 
-	// Webhook routes
-	webhookRoutes := router.Group("/api/webhook")
+	// Admin routes (protected)
+	admin := api.Group("/admin")
+	admin.Use(BasicAuthMiddleware(cfg))
 	{
-		webhookRoutes.POST("/check-in", lumaHandler.HandleCheckIn)
+		// Initialize handlers
+		adminHandler := NewAdminHandler(polkadotClient, eventRepo, nftRepo, userRepo, permRepo)
+
+		// Event management
+		admin.POST("/events", adminHandler.CreateEvent)
+		admin.GET("/events", adminHandler.ListEvents)
+		admin.GET("/events/:id", adminHandler.GetEvent)
+
+		// NFT management
+		admin.GET("/nfts", adminHandler.ListNFTs)
 	}
 
-	return router
+	// User routes (protected with JWT)
+	user := api.Group("/user")
+	user.Use(JWTAuth(cfg.JWTSecret))
+	{
+		// Initialize handlers
+		userHandler := NewUserHandler(polkadotClient, eventRepo, nftRepo, userRepo)
+
+		// User profile
+		user.GET("/profile", userHandler.GetProfile)
+		user.GET("/events", userHandler.GetUserEvents)
+		user.GET("/nfts", userHandler.GetUserNFTs)
+	}
+
+	return r
 }

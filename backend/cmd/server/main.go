@@ -11,12 +11,37 @@ import (
 
 	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/api"
 	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/config"
+	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/database"
 	"github.com/samuelarogbonlo/polkadot-attendance-nft/backend/internal/polkadot"
 )
 
 func main() {
 	// Load configuration
 	cfg := config.Load()
+
+	// Initialize database
+	db, err := database.New(database.Config{
+		Host:     cfg.Database.Host,
+		Port:     cfg.Database.Port,
+		User:     cfg.Database.User,
+		Password: cfg.Database.Password,
+		DBName:   cfg.Database.DBName,
+		SSLMode:  cfg.Database.SSLMode,
+	})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	// Run database migrations
+	if err := db.MigrateUp(); err != nil {
+		log.Fatalf("Failed to run database migrations: %v", err)
+	}
+
+	// Initialize repositories
+	eventRepo := database.NewEventRepository(db)
+	nftRepo := database.NewNFTRepository(db)
+	userRepo := database.NewUserRepository(db)
+	permRepo := database.NewPermissionRepository(db)
 
 	// Validate contract address
 	formattedAddress := api.ValidateContractAddress(cfg.ContractAddress)
@@ -25,7 +50,7 @@ func main() {
 	client := polkadot.NewClient(cfg.PolkadotRPC, formattedAddress)
 
 	// Create and configure the router
-	router := api.NewRouter(cfg, client)
+	router := api.NewRouter(cfg, client, eventRepo, nftRepo, userRepo, permRepo)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -52,6 +77,11 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	// Close database connection
+	if err := db.Close(); err != nil {
+		log.Printf("Error closing database connection: %v", err)
 	}
 
 	log.Println("Server exited gracefully")

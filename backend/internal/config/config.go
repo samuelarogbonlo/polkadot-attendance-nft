@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 )
@@ -12,6 +13,16 @@ type RateLimit struct {
 	RequestsPerMinute int  `json:"requests_per_minute"`
 }
 
+// Database holds database configuration
+type Database struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	DBName   string `json:"dbname"`
+	SSLMode  string `json:"sslmode"`
+}
+
 // Config holds all configuration for the application
 type Config struct {
 	ServerAddress   string    `json:"server_address"`
@@ -20,9 +31,10 @@ type Config struct {
 	LumaAPIKey      string    `json:"luma_api_key"`
 	LumaWebhookKey  string    `json:"luma_webhook_key"`
 	JWTSecret       string    `json:"jwt_secret"`
-	AdminUser       string    `json:"admin_user"`
+	AdminUsername   string    `json:"admin_username"`
 	AdminPassword   string    `json:"admin_password"`
 	RateLimit       RateLimit `json:"rate_limit"`
+	Database        Database  `json:"database"`
 }
 
 // Load loads configuration from environment variables or a config file
@@ -34,11 +46,19 @@ func Load() *Config {
 		LumaAPIKey:      getEnv("LUMA_API_KEY", ""),
 		LumaWebhookKey:  getEnv("LUMA_WEBHOOK_KEY", ""),
 		JWTSecret:       getEnv("JWT_SECRET", "polkadot-attendance-secret-key"),
-		AdminUser:       getEnv("ADMIN_USER", "admin"),
+		AdminUsername:   getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:   getEnv("ADMIN_PASSWORD", "password"),
 		RateLimit: RateLimit{
 			Enabled:           true,
 			RequestsPerMinute: 60,
+		},
+		Database: Database{
+			Host:     getEnv("DB_HOST", "localhost"),
+			Port:     getEnvAsInt("DB_PORT", 5432),
+			User:     getEnv("DB_USER", "postgres"),
+			Password: getEnv("DB_PASSWORD", "postgres"),
+			DBName:   getEnv("DB_NAME", "attendance_nft"),
+			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
 	}
 
@@ -63,6 +83,19 @@ func Load() *Config {
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+// getEnvAsInt gets an environment variable as an integer or returns a default value
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := getEnv(key, "")
+	if valueStr == "" {
+		return defaultValue
+	}
+	value := 0
+	if _, err := fmt.Sscanf(valueStr, "%d", &value); err != nil {
 		return defaultValue
 	}
 	return value

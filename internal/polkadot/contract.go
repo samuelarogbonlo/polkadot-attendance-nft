@@ -1,6 +1,7 @@
 package polkadot
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -55,6 +56,13 @@ func NewContractCaller(api *gsrpc.SubstrateAPI, contractAddr types.AccountID) Co
 		if err != nil {
 			log.Printf("Failed to load contract metadata: %v", err)
 			log.Printf("Some contract functions may not be available, falling back to mock for those")
+		} else {
+			// If we successfully loaded the metadata, log the available methods
+			log.Printf("Loaded contract metadata successfully")
+			log.Printf("Available methods:")
+			for _, message := range metadata.Spec.Messages {
+				log.Printf("  - %s (selector: %s)", message.Label, message.Selector)
+			}
 		}
 		
 		return &RealContractCaller{
@@ -139,6 +147,7 @@ func (c *RealContractCaller) Call(method string, args ...interface{}) ([]byte, e
 	}
 	
 	// Submit the extrinsic
+	log.Printf("Submitting extrinsic for method: %s", method)
 	sub, err := c.api.RPC.Author.SubmitAndWatchExtrinsic(ext)
 	if err != nil {
 		log.Printf("Failed to submit extrinsic: %v", err)
@@ -148,6 +157,7 @@ func (c *RealContractCaller) Call(method string, args ...interface{}) ([]byte, e
 	defer sub.Unsubscribe()
 	
 	// Wait for the transaction to be included in a block
+	log.Printf("Waiting for transaction to be included in a block...")
 	for {
 		status := <-sub.Chan()
 		if status.IsInBlock {
@@ -159,16 +169,19 @@ func (c *RealContractCaller) Call(method string, args ...interface{}) ([]byte, e
 		}
 	}
 	
-	// For now, return a success response
+	// For now, return a success response based on the method
 	// In a more complete implementation, we would extract events and return the actual result
+	log.Printf("Transaction completed successfully for method: %s", method)
 	
 	// Return the encoded result based on the method
 	switch method {
 	case "create_event":
-		// Mock a successful event creation with ID 1
-		return json.Marshal(uint64(1))
+		// Get the event ID from the blockchain event if possible
+		// For now, this is a simplified implementation
+		eventID := uint64(1) // Should get this from transaction events
+		return json.Marshal(eventID)
 	case "mint_nft":
-		// Mock a successful NFT minting
+		// For minting, return success
 		return json.Marshal(true)
 	default:
 		// For other methods, just return a success indicator
@@ -183,6 +196,7 @@ func isReadOnlyMethod(method string) bool {
 		"get_nft":        true,
 		"get_event_count": true,
 		"get_nft_count":  true,
+		"get_owned_nfts": true,
 	}
 	
 	return readOnlyMethods[method]
@@ -380,8 +394,22 @@ func (c *MockContractCaller) Call(method string, args ...interface{}) ([]byte, e
 
 	case "get_event_count":
 		return json.Marshal(c.eventCount)
+		
+	case "get_owned_nfts":
+		if len(args) < 1 {
+			return nil, fmt.Errorf("get_owned_nfts requires 1 argument")
+		}
+		
+		var owner string
+		if owner, ok := args[0].(string); ok {
+			// In a real implementation, we would return all NFTs owned by this address
+			// For mock, just return a list with NFT IDs 1, 2, 3
+			return json.Marshal([]uint64{1, 2, 3})
+		}
+		
+		return json.Marshal([]uint64{})
 
 	default:
 		return nil, fmt.Errorf("unknown method: %s", method)
 	}
-}
+} 

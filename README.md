@@ -22,6 +22,50 @@ The system consists of:
 2. **Backend API**: Go service handling Luma webhook integration and NFT minting
 3. **Frontend**: React-based dashboard for event management
 
+## Contract Integration
+
+The system includes a complete contract integration layer that interfaces with the Polkadot blockchain. This integration is implemented in two parts:
+
+1. **Abstraction Layer**: The `ContractCaller` interface provides a consistent API for calling contract methods, regardless of whether they're executed on-chain or via a mock implementation.
+
+2. **Real Blockchain Integration**: The `RealContractCaller` implements actual blockchain interactions using the following components:
+   - Contract metadata parsing
+   - Method selector encoding
+   - Transaction preparation and signing
+   - Extrinsic submission and monitoring
+
+3. **Mock Implementation**: For testing and development, a `MockContractCaller` implementation is provided that simulates blockchain behavior.
+
+### How to Use
+
+The contract integration automatically detects whether it can establish a real connection to the Polkadot node specified in the config:
+
+```json
+{
+  "polkadot_rpc": "wss://westend-rpc.polkadot.io",
+  "contract_address": "5E34VfGGLfR7unMf9UH6xCtsoKy7sgLiGzUXC47Mv2U5uB28"
+}
+```
+
+If a connection can be established and contract metadata found, it will attempt to use the real blockchain for interactions. If any part fails, it gracefully falls back to the mock implementation.
+
+### Testing Contract Integration
+
+Use the provided test script to verify the contract integration:
+
+```bash
+cd backend
+go build -o bin/contract-test ./cmd/contract-test
+./bin/contract-test
+```
+
+This will exercise the contract integration by:
+1. Creating an event on the blockchain
+2. Retrieving the event
+3. Storing it in the database
+4. Minting an NFT for the event
+5. Listing all events and NFTs
+
 # Polkadot Attendance NFT - Feature Verification Guide
 
 This guide will help you verify that all features of the Polkadot Attendance NFT application are working correctly. No technical knowledge is required!

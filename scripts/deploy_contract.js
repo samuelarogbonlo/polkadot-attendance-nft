@@ -64,7 +64,7 @@ async function main() {
 
   // Load contract WASM and metadata
   const contractPath = path.join(__dirname, '../contracts/target/ink/attendance_nft.wasm');
-  const metadataPath = path.join(__dirname, '../contracts/target/ink/metadata.json');
+  const metadataPath = path.join(__dirname, '../contracts/target/ink/attendance_nft.json');
 
   if (!fs.existsSync(contractPath) || !fs.existsSync(metadataPath)) {
     console.error('Contract WASM or metadata not found.');

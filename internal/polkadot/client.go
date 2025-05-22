@@ -63,46 +63,35 @@ func NewClient(rpcURL, contractAddress string) *Client {
 	var contractAddr types.AccountID
 	if contractAddress != "" {
 		// Try to convert from Substrate format (like '5E34Vf...') to AccountID
-		if len(contractAddress) > 0 && (contractAddress[0] == '5' || strings.HasPrefix(contractAddress, "0x")) {
-			log.Printf("Processing address: %s", contractAddress)
-			
-			var addrBytes []byte
-			var err error
-			
-			// Handle different address formats
-			if strings.HasPrefix(contractAddress, "0x") {
-				// Handle hex format
-				hexStr := strings.TrimPrefix(contractAddress, "0x")
-				addrBytes, err = hex.DecodeString(hexStr)
-				if err != nil {
-					log.Printf("Invalid hex address: %v", err)
-				}
-			} else {
-				// Try as Substrate SS58 address
-				_, pubKey, err := subkey.SS58Decode(contractAddress)
-				if err != nil {
-					log.Printf("Invalid SS58 address: %v", err)
-				} else {
-					addrBytes = pubKey
-				}
-			}
-			
-			// If we successfully decoded the address
-			if len(addrBytes) == 32 { // AccountID is 32 bytes
-				copy(contractAddr[:], addrBytes)
-				log.Printf("Successfully converted address to AccountID")
-			} else {
-				log.Printf("Address conversion failed, falling back to mock implementation")
-				return &Client{
-					api:            api,
-					contractCaller: NewMockContractCaller(),
-					useMock:        true,
-					chainName:      chainName,
-				}
+		log.Printf("Processing contract address: %s", contractAddress)
+		
+		var addrBytes []byte
+		var err error
+		
+		// Handle different address formats
+		if strings.HasPrefix(contractAddress, "0x") {
+			// Handle hex format
+			hexStr := strings.TrimPrefix(contractAddress, "0x")
+			addrBytes, err = hex.DecodeString(hexStr)
+			if err != nil {
+				log.Printf("Invalid hex address: %v", err)
 			}
 		} else {
-			log.Printf("Unrecognized address format: %s", contractAddress)
-			log.Printf("Using mock implementation for development")
+			// Try as Substrate SS58 address
+			_, pubKey, err := subkey.SS58Decode(contractAddress)
+			if err != nil {
+				log.Printf("Invalid SS58 address: %v", err)
+			} else {
+				addrBytes = pubKey
+			}
+		}
+		
+		// If we successfully decoded the address
+		if len(addrBytes) == 32 { // AccountID is 32 bytes
+			copy(contractAddr[:], addrBytes)
+			log.Printf("Successfully converted address to AccountID")
+		} else {
+			log.Printf("Address conversion failed, falling back to mock implementation")
 			return &Client{
 				api:            api,
 				contractCaller: NewMockContractCaller(),
@@ -112,6 +101,12 @@ func NewClient(rpcURL, contractAddress string) *Client {
 		}
 	} else {
 		log.Printf("No contract address provided, using mock implementation")
+		return &Client{
+			api:            api,
+			contractCaller: NewMockContractCaller(),
+			useMock:        true,
+			chainName:      chainName,
+		}
 	}
 
 	// Create contract caller
@@ -145,6 +140,7 @@ func (c *Client) CreateEvent(name, date, location string) (uint64, error) {
 	}
 	
 	// Call the smart contract
+	log.Printf("Calling contract method: create_event")
 	result, err := c.contractCaller.Call("create_event", name, date, location)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create event: %v", err)
@@ -165,12 +161,13 @@ func (c *Client) GetEvent(id uint64) (*models.Event, error) {
 	log.Printf("Getting event with ID: %d", id)
 	
 	// Call the smart contract
+	log.Printf("Calling contract method: get_event")
 	result, err := c.contractCaller.Call("get_event", id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get event: %v", err)
 	}
 
-	// Check if event exists
+	// Check if event exists (empty result)
 	if len(result) == 0 {
 		log.Printf("Event %d not found", id)
 		return nil, nil
@@ -191,6 +188,7 @@ func (c *Client) ListEvents() ([]models.Event, error) {
 	log.Printf("Listing all events")
 	
 	// Get total event count
+	log.Printf("Calling contract method: get_event_count")
 	countResult, err := c.contractCaller.Call("get_event_count")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get event count: %v", err)
@@ -238,6 +236,7 @@ func (c *Client) MintNFT(eventID uint64, recipient string, metadata map[string]i
 	}
 
 	// Call the smart contract
+	log.Printf("Calling contract method: mint_nft")
 	result, err := c.contractCaller.Call("mint_nft", eventID, recipient, string(metadataJSON))
 	if err != nil {
 		return false, fmt.Errorf("failed to mint NFT: %v", err)
@@ -263,6 +262,7 @@ func (c *Client) ListNFTs() ([]models.NFT, error) {
 	log.Printf("Listing all NFTs")
 	
 	// Get total NFT count
+	log.Printf("Calling contract method: get_nft_count")
 	countResult, err := c.contractCaller.Call("get_nft_count")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NFT count: %v", err)
@@ -295,8 +295,8 @@ func (c *Client) ListNFTs() ([]models.NFT, error) {
 		}, nil
 	}
 
-	// In real implementation, we would fetch each NFT
-	// For now, just return an empty array for non-zero counts
+	// For real implementation, we would fetch each NFT
+	// For now, just return an empty array
 	nfts := make([]models.NFT, 0, count)
 	return nfts, nil
-}
+} 
